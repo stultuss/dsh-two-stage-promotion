@@ -1,0 +1,25 @@
+dsh-two-stage-promotion
+=======================
+
+Derived from @linxin666/dsh-liangshen (Apache-2.0,
+https://github.com/zhu1090093659/dsh-web), which is in turn derived from
+xiaobright/dsh-anchored-standard (MIT,
+https://github.com/xiaobright/dsh-anchored-standard).
+
+This package renames the two-phase preset to 二阶段晋升模式
+(two-stage-promotion), keeps the host-side preset sync mechanism, and adds a
+feature-detected Session API shim so the preset plugin runs on both the legacy
+DSH (`session.events`) and the current DSH (`session.snapshotEvents()`,
+0.1.2-rc.1 and later) without an engines floor above 0.1.2-alpha.4.
+
+Local fixes carried from the liangshen debug session (2026-09-04):
+- tool-bootstrap.mjs: `session.events` -> feature-detected
+  `session.events` / `session.snapshotEvents()` (the legacy read crashed every
+  turn on the current DSH with "Cannot read properties of undefined
+  (reading 'length')").
+- Black-box diagnostics: listener crashes append full stacks to
+  /tmp/two-stage-promotion-crash.log; a MOUNT marker is written per apply().
+
+See LICENSE (Apache-2.0) for the package license. The xiaobright
+dsh-anchored-standard portions remain MIT; see the upstream repositories for
+their notices.

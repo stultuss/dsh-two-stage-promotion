@@ -1,0 +1,3 @@
+name: 二阶段晋升模式
+description: 二阶段晋升：开局只给 bash + str_replace_editor 两件工具、单行 persona、零注入，锚定 Minimal 轨迹；首个锚定推理或工具调用后自动晋升为完整工具集（PTC Mode），工作区指令与技能目录延迟一步注入。源自梁神模式，已适配当前 DSH 的 Session API。
+order: 5

@@ -1,0 +1,18 @@
+This preset (two-stage-promotion / 二阶段晋升模式) ships with the
+dsh-two-stage-promotion package and is synced into
+~/.dsh/.agent-presets/two-stage-promotion on host startup.
+
+Upstream lineage:
+- xiaobright/dsh-anchored-standard (MIT) — two-phase bootstrap plugin design.
+- @linxin666/dsh-liangshen (Apache-2.0) — preset packaging and host-side sync.
+
+Local fixes carried here:
+- tool-bootstrap.mjs: feature-detected Session event access — legacy DSH
+  `session.events` vs current DSH `session.snapshotEvents()` (0.1.2-rc.1+).
+  The legacy-only read crashed every turn on the current DSH with
+  "Cannot read properties of undefined (reading 'length')".
+- Black-box diagnostics: listener crashes append full stacks to
+  /tmp/two-stage-promotion-crash.log; a MOUNT marker is written per apply().
+
+The plugin that owns this preset (dsh-two-stage-promotion) only manages this
+directory; user-authored sibling presets are never touched.

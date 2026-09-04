@@ -1,0 +1,44 @@
+{
+  "name": "dsh-two-stage-promotion",
+  "version": "0.1.0",
+  "author": "stultuss",
+  "description": "二阶段晋升模式 agent preset for the dsh web GUI: a two-phase promotion preset — phase 1 exposes the builtin Minimal exact two-tool surface (persistent bash plus str_replace_editor) with no runtime contexts or injected instructions (Minimal-aligned trajectory anchor); promotion is gated on the first minimal-like reasoning block with a fallback; the wire then switches to PTC Mode (a single run_code tool over the full registry) with the ordinary injections returning afterwards. The preset files are synced into ~/.dsh/.agent-presets on host startup. Compatible with both the legacy and current DSH Session APIs via feature detection.",
+  "homepage": "https://github.com/stultuss/dsh-two-stage-promotion#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stultuss/dsh-two-stage-promotion.git"
+  },
+  "bugs": "https://github.com/stultuss/dsh-two-stage-promotion/issues",
+  "type": "module",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json",
+    "./presets/*": "./presets/*"
+  },
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.1.2-alpha.4"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "schemastery": "^3.18.0"
+  },
+  "files": [
+    "lib",
+    "presets",
+    "cordis.patch.yml",
+    "README.md",
+    "NOTICE",
+    "LICENSE"
+  ],
+  "license": "Apache-2.0"
+}
