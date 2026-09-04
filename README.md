@@ -42,5 +42,5 @@ cordis.patch.yml            profile bundle patch(插入宿主插件行)
 
 派生自 `@linxin666/dsh-liangshen`(Apache-2.0),
 
-后者又派生自xiaobright/dsh-anchored-standard(MIT)。
+后者又派生自 `xiaobright/dsh-anchored-standard`(MIT)。
 详见 [NOTICE](./NOTICE)。
