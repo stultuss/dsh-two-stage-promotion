@@ -3,7 +3,8 @@
  * the full preset catalog once the session is safely anchored.
  *
  * Phase 1 (no persisted `tool/call` yet):
- * - tool catalog: one platform shell plus `commonTools`
+ * - tool catalog: one platform shell plus `commonTools` (empty in the shipped
+ *   preset: 0.1.5-rc.1's builtin Minimal preset is a single persistent shell)
  * - prompt sections: only the persona section (all other sections,
  *   including plan-mode's `plan:policy`, return after promotion)
  * - runtime contexts: emptied (no sandbox/approval snapshot)
@@ -16,7 +17,7 @@
  * `we` and no `let me`) or the `maxBootstrapSteps` fallback.
  * `promoteAfterFirstResponse` promotes a tool-less first response once it has
  * responded, and also releases an anchor-gated session when its first turn
- * ends (`turn/end`). With `promotedPresentation: code` the promoted catalog
+ * ends (`turn/end`). With `promotedPresentation: ptc` the promoted catalog
  * is presented as PTC Mode: the wire shows a single `run_code` tool
  * backed by the generated SDK, switched at the step boundary so the current
  * step's native calls are never interrupted. `deferredSources` and
@@ -27,8 +28,8 @@
  * semantics): a compaction rewrites the whole model-visible surface, so the
  * first post-compaction request is a "second first request". A
  * `compaction/end` event releases PTC Mode (the presentation disposer) and
- * resets the promotion state to the CONTROLLED phase — bootstrap pair plus
- * `compactionTools` (a core work set, default none) — until a NEW durable
+ * resets the promotion state to the CONTROLLED phase — the bootstrap shell
+ * plus `compactionTools` (a core work set, default none) — until a NEW durable
  * promotion signal exists past that boundary. The reset lives both in the
  * live `session/event` path and inside the durable-log scan, so resume and
  * reload reconstruct the same phase.
@@ -42,7 +43,7 @@
  * keeps the phase-1 persona the exact one-line Minimal anchor. Test builds
  * use it to ask the model to ground its first answer with one Minimal-native
  * tool call before responding, so first-turn capability questions are
- * answered from the promoted registry instead of the cropped two-tool view.
+ * answered from the promoted registry instead of the cropped one-tool view.
  *
  * Source: https://github.com/xiaobright/dsh-anchored-standard (MIT), extended
  * with the phase-1 quarantine and the stabilization controls above.
@@ -86,12 +87,20 @@ export const inject = ['systemPrompt', 'tools']
 
 /**
  * Prompt section names that carry the preset persona. The `dsh-persona` row
- * registers the preset persona as `deployment:persona` (the PERSONA_SECTION
- * name of `@deepseek-ai/dsh-system-prompt`), shadowing the deployment
- * default for the preset scope; `persona` is the legacy name kept for older
- * harnesses that registered the persona section without the prefix.
+ * registers the preset persona as `deployment:persona-prefix` (the
+ * PERSONA_PREFIX_SECTION name of `@deepseek-ai/dsh-system-prompt` since DSH
+ * 0.1.5-rc.1, which split the one persona section into a prefix and a suffix
+ * half). `deployment:persona` is the name older 0.1.x harnesses registered
+ * the single persona section under, and `persona` is the legacy unprefixed
+ * name.
+ *
+ * The SUFFIX section (`deployment:persona-suffix`) is deliberately NOT in
+ * this set: phase 1 must render the exact one-line Minimal persona, and the
+ * suffix is where a deployment puts the working-directory line. Phase 2
+ * restores it untouched (the preset's own `dsh-persona` row shadows it with
+ * an empty text, so a promoted assembly renders no duplicate cwd line).
  */
-const PERSONA_SECTION_NAMES = new Set(['deployment:persona', 'persona'])
+const PERSONA_SECTION_NAMES = new Set(['deployment:persona-prefix', 'deployment:persona', 'persona'])
 
 /**
  * Workspace line a promoted persona gains. Phase 1 keeps the exact one-line
@@ -333,9 +342,11 @@ function resetToControlled(state, session) {
  * Switch one agent's wire presentation to PTC Mode (PTC: a single `run_code`
  * tool backed by the generated SDK) after promotion. `agent.ctx.tools` is the
  * per-agent view of the host registry, so the switch affects this session only.
+ * `ptc` is the DSH 0.1.5-rc.1 name of the collapsing presentation; the older
+ * `code` mode name is gone from `dsh-tools`' schema.
  */
 function applyPresentation(agent, state, policy) {
-  if (state.presentationApplied || policy.promotedPresentation !== 'code') return
+  if (state.presentationApplied || policy.promotedPresentation !== 'ptc') return
   const tools = agent?.ctx?.tools
   // Latch only after the switch really happened: without a tools view there
   // is nothing to present, and latching early would skip PTC Mode forever.
@@ -343,12 +354,12 @@ function applyPresentation(agent, state, policy) {
   // The disposer restores the deployment-default (native) presentation; it is
   // kept on the state so a post-compaction reset can release PTC Mode and
   // let the phase-1 catalog filter see the native tool list again.
-  state.presentationDisposer = tools.presentAs('code')
+  state.presentationDisposer = tools.presentAs('ptc')
   state.presentationApplied = true
   // #1128: Broadcast presentation switch so external discipline / analysis
   // plugins decouple presentation mode from tool failure detection.
   if (typeof agent?.ctx?.emit === 'function') {
-    agent.ctx.emit('tools/presentation-changed', { mode: 'code', session: agent.session?.id })
+    agent.ctx.emit('tools/presentation-changed', { mode: 'ptc', session: agent.session?.id })
   }
 }
 
@@ -413,7 +424,7 @@ function refresh(agent, policy) {
   return state
 }
 
-const PTC_INSTRUCTION = '\n\nNote: You are in Programmatic Tool Calling (PTC) mode. All actions (running shell commands, file operations, web tools) MUST be performed via the `run_code` tool by writing and executing TypeScript/JavaScript programs. Do not attempt to invoke tools like `bash` or `str_replace_editor` directly on the wire.'
+const PTC_INSTRUCTION = '\n\nNote: You are in Programmatic Tool Calling (PTC) mode. All actions (running shell commands, file operations, web tools) MUST be performed via the `run_code` tool by writing and executing TypeScript/JavaScript programs. Do not attempt to invoke tools like `bash` directly on the wire.'
 
 /**
  * Append the session's working directory to the persona section of a promoted
@@ -439,10 +450,10 @@ function withWorkspaceLine(assembly, agent) {
 }
 
 /**
- * Append PTC mode instructions to the persona section when promoted to code presentation.
+ * Append PTC mode instructions to the persona section when promoted to the ptc presentation.
  */
 function withPtcInstruction(assembly, policy) {
-  if (policy?.promotedPresentation !== 'code') return assembly
+  if (policy?.promotedPresentation !== 'ptc') return assembly
   if (!Array.isArray(assembly.sections)) return assembly
   const persona = assembly.sections.find(section =>
     PERSONA_SECTION_NAMES.has(section?.name)
@@ -459,14 +470,14 @@ function withPtcInstruction(assembly, policy) {
 
 /** Register the per-session bootstrap quarantine and promotion policy. */
 export function apply(ctx, config) {
-  crashMark('MOUNT two-stage-promotion tool-bootstrap V3 blackbox: snapshotEvents fix + stack capture')
-  const commonTools = stringList(config.commonTools, 'commonTools')
+  crashMark('MOUNT two-stage-promotion tool-bootstrap V4 blackbox: 0.1.5-rc.1 single-shell Minimal + persona-prefix section + ptc presentation')
+  const commonTools = stringListOrEmpty(config.commonTools, 'commonTools')
   const shellTools = stringList(config.shellTools, 'shellTools')
   const messageSources = new Set(stringList(config.messageSources, 'messageSources', DEFAULT_MESSAGE_SOURCES))
   const deferredSources = new Set(stringListOrEmpty(config.deferredSources, 'deferredSources'))
   const presentation = config.promotedPresentation ?? 'native'
-  if (presentation !== 'native' && presentation !== 'code') {
-    throw new TypeError(`${name}: promotedPresentation must be "native" or "code"`)
+  if (presentation !== 'native' && presentation !== 'ptc') {
+    throw new TypeError(`${name}: promotedPresentation must be "native" or "ptc"`)
   }
 
   let warned = false
@@ -484,7 +495,7 @@ export function apply(ctx, config) {
     : integerAtLeast(config.bootstrapMaxTokens, 'bootstrapMaxTokens', 1)
   // Core work set exposed during the post-compaction controlled phase, so a
   // mid-task model keeps working with a small catalog instead of the full
-  // Standard set. Defaults to none: the session stays on the bootstrap pair
+  // Standard set. Defaults to none: the session stays on the bootstrap shell
   // until a new promotion signal (the composition may widen it via config).
   const compactionTools = stringListOrEmpty(config.compactionTools, 'compactionTools')
   // Opt-in extra line for the phase-1 persona (test builds, issue #274):

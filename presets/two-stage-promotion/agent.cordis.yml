@@ -1,11 +1,14 @@
 # The `two-stage-promotion` (二阶段晋升模式) agent preset: a direct copy of the
 # `liangshen` (梁神模式) preset under a neutral identity. Phase 1 exposes the
-# builtin Minimal preset's exact two tools (persistent `bash` plus
-# `str_replace_editor`) and the same one-line persona, with no runtime
-# contexts and no injected pre-step messages, anchoring the Minimal
-# trajectory; after a stabilized anchor the wire switches to PTC Mode and the
-# ordinary injections open. Carries the `session.events` ->
-# `session.snapshotEvents()` API fix required by the current DSH Session API.
+# builtin Minimal preset's exact surface — one persistent shell and the same
+# one-line persona, with no runtime contexts and no injected pre-step
+# messages — anchoring the Minimal trajectory; after a stabilized anchor the
+# wire switches to PTC Mode and the ordinary injections open. Carries the
+# `session.events` -> `session.snapshotEvents()` API fix required by the DSH
+# Session API, and the 0.1.5-rc.1 adaptations: the single-tool Minimal
+# surface (`@deepseek-ai/dsh-tool-str-replace-editor` is no longer part of it),
+# the `deployment:persona-prefix` persona section name, the `prefix` persona
+# field, and the `ptc` presentation mode (`code` was renamed).
 #
 # Derived from `liangshen` (xiaobright/dsh-anchored-standard + dsh-liangshen
 # extensions), itself adapted from the builtin `minimal` and `standard` presets.
@@ -30,26 +33,37 @@
 # ── identity ────────────────────────────────────────────────────────────────
 
 # Phase 1 shows only this one-line persona: `tool-bootstrap` filters the
-# assembled sections down to the persona section (`deployment:persona`, the
-# name `dsh-persona` registers under, plus the legacy `persona` name) during
+# assembled sections down to the persona PREFIX section
+# (`deployment:persona-prefix`, the name `dsh-persona` registers under since
+# 0.1.5-rc.1, plus the legacy `deployment:persona` / `persona` names) during
 # phase 1 and restores every section after promotion, appending the session's
 # working directory to the persona — so the agent knows its workspace and
 # plan-mode's `plan:policy` takes effect instead of being permanently
 # shadowed by a `complete` persona.
+#
+# `complete: true` and `includeRuntimeContext: false` — the fields the builtin
+# `minimal` preset uses to make its persona the whole prompt — are
+# deliberately NOT set here. The assembly re-imposes a complete section AFTER
+# the `system-prompt/assemble` waterfall, so a complete persona would still be
+# the only section in phase 2; and a suppressed runtime context could never be
+# restored. Phase 1 reaches the same byte-exact Minimal prompt through
+# `tool-bootstrap`'s own filter (persona-only sections, `contexts: []`).
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: You are a helpful software engineer assistant.
+    prefix: You are a helpful software engineer assistant.
 
-# Two-phase input bootstrap with the exact Minimal phase-1 tools. Before the
-# first durable tool/call event the model sees only persistent `bash` plus
-# `str_replace_editor`, only the `persona` prompt section, no runtime
-# contexts, and only whitelisted source kinds (direct user messages plus
-# goal auto-rounds — a filtered-out `/goal` round never reaches the model, so
-# no promotion branch fires and the resume/pause loop deadlocks, issue #578).
+# Two-phase input bootstrap with the exact Minimal phase-1 surface. Before the
+# first durable tool/call event the model sees only the one persistent `bash`
+# tool (`commonTools` is empty: 0.1.5-rc.1's builtin Minimal preset dropped
+# `str_replace_editor` and is a single-shell configuration), only the
+# `persona` prompt section, no runtime contexts, and only whitelisted source
+# kinds (direct user messages plus goal auto-rounds — a filtered-out `/goal`
+# round never reaches the model, so no promotion branch fires and the
+# resume/pause loop deadlocks, issue #578).
 # `anchorGate` holds the promotion
 # open until the first reasoning block is minimal-like (four-step fallback);
-# `promoteAfterFirstResponse` avoids a permanent two-tool session after a
+# `promoteAfterFirstResponse` avoids a permanent one-tool session after a
 # tool-less first response, and releases an anchor-gated session once its
 # first turn ends (`turn/end`). After promotion the catalog is presented as
 # PTC Mode: a single `run_code` tool on the wire, switched at the step
@@ -58,20 +72,24 @@
 # budget (community-observed "We need" trigger window, 1024) and is stripped
 # again after promotion so the cap never solders into later requests.
 # After a compaction the session falls back to the controlled phase — the
-# bootstrap pair plus `compactionTools` (a core work set) — until a NEW
+# bootstrap shell plus `compactionTools` (a core work set) — until a NEW
 # promotion signal exists past the boundary, and PTC Mode is released until
 # the session re-promotes.
 # `phase1FirstCallInstruction` is an opt-in extra line appended to the
 # phase-1 persona for test builds (issue #274): the model is asked to ground
 # its first answer with one Minimal-native tool call before responding, so
 # first-turn capability questions are answered from the promoted registry
-# instead of the cropped two-tool view. It deviates from the byte-exact
+# instead of the cropped one-tool view. It deviates from the byte-exact
 # Minimal surface and is therefore left unset (off) by default.
 - id: tool-bootstrap
   name: ./tool-bootstrap.mjs
   config:
     shellTools: [bash]
-    commonTools: [str_replace_editor]
+    # Empty since 0.1.5-rc.1: the builtin Minimal preset is exactly one
+    # persistent shell, so phase 1 adds no common tool. `commonTools` is
+    # optional and still accepts names (a deployment can pin extra phase-1
+    # tools back on).
+    commonTools: []
     messageSources: [user, goal]
     anchorGate: true
     maxBootstrapSteps: 4
@@ -80,7 +98,7 @@
     compactionTools: [read, write, edit, glob, grep, todo_write, ask_user_question]
     deferredSources: [agent-instructions, skill-catalog]
     deferredGraceSteps: 1
-    promotedPresentation: code
+    promotedPresentation: ptc
     # Issue #388: after promotion, inject one non-imperative hint (reference
     # files exist at these paths; read them on demand) instead of the full
     # AGENTS.md dump — the full-text injection measurably flips the anchored
@@ -138,26 +156,14 @@
 # linux/darwin-only, so win32 disables the persistent-shell group and
 # registers this `bash` through the ordinary cross-platform subprocess seam
 # (Git Bash). Both platforms end up with exactly one tool named `bash`, so the
-# phase-1 Minimal anchor (shellTools: [bash] + str_replace_editor) is
-# unchanged. Non-zero exit is reported not thrown; state does NOT persist
+# phase-1 Minimal anchor (shellTools: [bash], commonTools: []) is unchanged.
+# Non-zero exit is reported not thrown; state does NOT persist
 # across calls on this path; no OS sandbox confinement on Windows. `bashPath`
 # is optional (defaults to Git Bash inference); set it explicitly when git is
 # not on PATH.
 - id: custom-bash
   name: ./custom-bash.mjs
   disabled: !!js process.platform !== 'win32'
-
-# ── minimal phase-1 filesystem ──────────────────────────────────────────────
-
-# Phase-1 editor as a direct top-level row: it reuses the host's sandboxed
-# `ctx.fs`, not a bare local filesystem. No `dsh-fs-local` realm is mounted, so
-# the phase-1 editor inherits the host file sandbox exactly like every
-# Standard file tool, and the model-facing schema stays the builtin Minimal
-# `str_replace_editor`.
-- id: str-replace-editor
-  name: '@deepseek-ai/dsh-tool-str-replace-editor'
-  config:
-    maxOutputChars: 16000
 
 # ── standard filesystem tools ───────────────────────────────────────────────
 
@@ -198,12 +204,18 @@
 
 # ── goals ───────────────────────────────────────────────────────────────────
 
-# Only the model-facing tool. The goal SERVICE, its session driver, and the
-# `/goal` command stay on the host plane: the Gateway serves the goal domain as
-# Remote endpoints whose receiver comes from a generated descriptor, so it
-# resolves `goals` on the host and an entry-local realm here would hide it. The
-# registry is keyed by session anyway, so one host instance serves every
-# session. What a preset chooses is whether its agent can call the goal tool.
+# The goal SERVICE and its session driver stay on the host plane: the Gateway
+# serves the goal domain as Remote endpoints whose receiver comes from a
+# generated descriptor, so it resolves `goals` on the host and an entry-local
+# realm here would hide it. The registry is keyed by session anyway, so one
+# host instance serves every session. What a preset chooses is whether its
+# agent can reach goals at all — the human `/goal` command and the
+# model-facing tool each register into THIS preset's scoped layers, so both
+# rows are needed for the goal rounds `tool-bootstrap` whitelists
+# (`messageSources: [user, goal]`) to exist.
+- id: command-goal
+  name: '@deepseek-ai/dsh-command-goal'
+
 - id: tool-goal
   name: '@deepseek-ai/dsh-tool-goal'
 
@@ -359,3 +371,10 @@
   config:
     fetch: false
     searchTimeoutMs: 60000
+
+# Explicit file delivery for the promoted catalog (0.1.5-rc.1 row; the shipped
+# standard / ptc / cordis presets all carry it). Quarantined with every other
+# non-bootstrap tool during phase 1 and reachable through the PTC SDK after
+# promotion.
+- id: present
+  name: '@deepseek-ai/dsh-tool-present'

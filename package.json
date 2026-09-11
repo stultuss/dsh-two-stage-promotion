@@ -1,8 +1,8 @@
 {
   "name": "dsh-two-stage-promotion",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "stultuss",
-  "description": "二阶段晋升模式 agent preset for the dsh web GUI: a two-phase promotion preset — phase 1 exposes the builtin Minimal exact two-tool surface (persistent bash plus str_replace_editor) with no runtime contexts or injected instructions (Minimal-aligned trajectory anchor); promotion is gated on the first minimal-like reasoning block with a fallback; the wire then switches to PTC Mode (a single run_code tool over the full registry) with the ordinary injections returning afterwards. The preset files are synced into ~/.dsh/.agent-presets on host startup. Compatible with both the legacy and current DSH Session APIs via feature detection.",
+  "description": "二阶段晋升模式 agent preset for the dsh web GUI: a two-phase promotion preset — phase 1 exposes the builtin Minimal exact surface (one persistent bash tool since DSH 0.1.5-rc.1) with no runtime contexts or injected instructions (Minimal-aligned trajectory anchor); promotion is gated on the first minimal-like reasoning block with a fallback; the wire then switches to PTC Mode (a single run_code tool over the full registry) with the ordinary injections returning afterwards. The preset files are synced into ~/.dsh/.agent-presets on host startup. Targets the DSH 0.1.5-rc.1 preset surface (persona prefix section, single-tool Minimal, ptc presentation); the Session API is still read through feature detection.",
   "homepage": "https://github.com/stultuss/dsh-two-stage-promotion#readme",
   "repository": {
     "type": "git",
@@ -23,7 +23,7 @@
   },
   "dsh": {
     "engines": {
-      "dsh": ">=0.1.2-alpha.4"
+      "dsh": ">=0.1.5-rc.1"
     },
     "bundle": {
       "patch": "./cordis.patch.yml"
