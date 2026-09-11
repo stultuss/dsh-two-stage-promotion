@@ -70,7 +70,11 @@
 # boundary; workspace instructions and the skill catalog are deferred one
 # step after promotion. `bootstrapMaxTokens` caps the phase-1 request output
 # budget (community-observed "We need" trigger window, 1024) and is stripped
-# again after promotion so the cap never solders into later requests.
+# again after promotion so the cap never solders into later requests;
+# `bootstrapMaxTokensByEffort` scales that window for efforts whose thinking
+# block does not fit it (thinking and the answer share one output budget), so
+# a max-effort session is still sampled instead of censored at 1024 — samples
+# taken under a scaled window form their own cohort (see below).
 # After a compaction the session falls back to the controlled phase — the
 # bootstrap shell plus `compactionTools` (a core work set) — until a NEW
 # promotion signal exists past the boundary, and PTC Mode is released until
@@ -95,6 +99,18 @@
     maxBootstrapSteps: 4
     promoteAfterFirstResponse: true
     bootstrapMaxTokens: 1024
+    # Effort-scaled override, keyed by the session's resolved reasoning effort
+    # id (DeepSeek adapter: off | low | high | max). `1024` stays the window for
+    # every effort whose first reasoning block fits it (measured on 0.1.5-rc.1:
+    # off/low 33-118 reasoning tokens, high 93-899, turn completed); `max`
+    # deliberates past the window on its own — three observed phase-1 samples
+    # were all censored at 1024 with the block still open (3440 / 3946 chars),
+    # and post-promotion steps reach 1.2k-9.2k tokens — so it gets a wider
+    # window (2048). Whatever value applies is stripped after promotion by
+    # matching the applied set, and the anchor rate must be reported per
+    # (effort, window) cohort, never pooled across windows.
+    bootstrapMaxTokensByEffort:
+      max: 2048
     compactionTools: [read, write, edit, glob, grep, todo_write, ask_user_question]
     deferredSources: [agent-instructions, skill-catalog]
     deferredGraceSteps: 1

@@ -80,12 +80,13 @@ function main() {
       const header = event.data.header ?? {}
       const tools = (header.tools ?? []).map((tool) => tool.name)
       const maxTokens = header.config?.maxTokens
+      const effort = header.config?.reasoningEffort
       const shape = shapeOf(tools, maxTokens)
       const changed = shape !== lastShape
       lastShape = shape
       const shown = tools.length <= 4 ? tools.join(', ') : `${tools.slice(0, 4).join(', ')}, …`
       console.log(
-        `${where.padEnd(9)} request/header         ${shape.padEnd(24)} maxTokens=${String(maxTokens ?? '未设置').padEnd(7)} [${shown}]`
+        `${where.padEnd(9)} request/header         ${shape.padEnd(24)} maxTokens=${String(maxTokens ?? '未设置').padEnd(7)} effort=${String(effort ?? '默认').padEnd(5)} [${shown}]`
         + (changed ? '   ← 面切换' : ''),
       )
       continue
@@ -100,6 +101,23 @@ function main() {
 
     if (event.type === 'compaction/start' || event.type === 'compaction/end') {
       console.log(`${where.padEnd(9)} ${event.type}${event.type === 'compaction/end' ? '          回到受控阶段(下次请求重新锚定)' : ''}`)
+      continue
+    }
+
+    if (event.type === 'assistant/message') {
+      const usage = event.data.usage ?? {}
+      const output = usage.outputTokens
+      const reasoning = usage.reasoningTokens
+      if (output !== undefined || reasoning !== undefined) {
+        const censored = usage.outputTokens !== undefined && usage.outputTokens === usage.reasoningTokens ? '  ← 整窗被思考吃光(截断)' : ''
+        console.log(`${where.padEnd(9)} assistant/message      out=${String(output ?? '?')} rsn=${String(reasoning ?? '?')}${censored}`)
+      }
+      continue
+    }
+
+    if (event.type === 'turn/end') {
+      const kind = event.data.reason?.kind ?? '(未知)'
+      console.log(`${where.padEnd(9)} turn/end               kind=${kind}${kind === 'max-tokens' ? '  ← 命中输出上限(一阶段窗)' : ''}`)
       continue
     }
 

@@ -493,6 +493,33 @@ export function apply(ctx, config) {
   const bootstrapMaxTokens = config.bootstrapMaxTokens === undefined
     ? undefined
     : integerAtLeast(config.bootstrapMaxTokens, 'bootstrapMaxTokens', 1)
+  // Effort-scaled trigger window (see agent.cordis.yml): thinking and the
+  // answer share one output budget, so an effort whose first reasoning block
+  // cannot fit `bootstrapMaxTokens` would otherwise censor every phase-1
+  // sample instead of yielding a classifiable trajectory.
+  const bootstrapMaxTokensByEffort = (() => {
+    const raw = config.bootstrapMaxTokensByEffort
+    const entries = new Map()
+    if (raw === undefined) return entries
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      throw new TypeError(`${name}: bootstrapMaxTokensByEffort must map reasoning effort ids to positive integers`)
+    }
+    for (const [effort, value] of Object.entries(raw)) {
+      if (effort === '') throw new TypeError(`${name}: bootstrapMaxTokensByEffort keys must be non-empty`)
+      entries.set(effort, integerAtLeast(value, `bootstrapMaxTokensByEffort.${effort}`, 1))
+    }
+    return entries
+  })()
+  // Every window this preset can put on the wire: the strip after promotion
+  // matches the whole set, because a session may switch reasoning effort
+  // between the capped request and the promoted one.
+  const appliedWindows = new Set(bootstrapMaxTokensByEffort.values())
+  if (bootstrapMaxTokens !== undefined) appliedWindows.add(bootstrapMaxTokens)
+  const windowFor = request => {
+    const effort = request?.reasoningEffort
+    if (typeof effort === 'string' && bootstrapMaxTokensByEffort.has(effort)) return bootstrapMaxTokensByEffort.get(effort)
+    return bootstrapMaxTokens
+  }
   // Core work set exposed during the post-compaction controlled phase, so a
   // mid-task model keeps working with a small catalog instead of the full
   // Standard set. Defaults to none: the session stays on the bootstrap shell
@@ -513,6 +540,7 @@ export function apply(ctx, config) {
     // reference files, so the injection never flips the anchored trajectory.
     instructionHint: config.instructionHint === true,
     bootstrapMaxTokens,
+    bootstrapMaxTokensByEffort,
     compactionTools,
     phase1FirstCallInstruction,
   }
@@ -621,23 +649,28 @@ export function apply(ctx, config) {
     return result
   }), { prepend: true })
 
-  // Phase 1 caps the next request output budget to bootstrapMaxTokens, the
-  // community-observed We-need trigger window (dsh-anchored-standard issue 6),
-  // and strips the cap again after promotion. The strip is mandatory:
-  // requestProposal(persistedHeader) carries a plain maxTokens from the
-  // previous header into the next request unless the adapter marked it a
-  // default, so an un-stripped cap would be soldered into every request.
+  // Phase 1 caps the next request output budget to the trigger window —
+  // `bootstrapMaxTokens`, or the effort-scaled override when the resolved
+  // reasoning effort has one (community-observed We-need trigger window,
+  // dsh-anchored-standard issue 6) — and strips the cap again after promotion.
+  // The strip is mandatory: requestProposal(persistedHeader) carries a plain
+  // maxTokens from the previous header into the next request unless the
+  // adapter marked it a default, so an un-stripped cap would be soldered into
+  // every request. It matches the whole applied set, because the session can
+  // switch reasoning effort between the capped request and the promoted one.
   ctx.on('agent/request', withCrashLog('agent/request', async (payload, next) => {
     const resolved = await next()
     const agent = payload?.agent
-    if (agent === undefined || policy.bootstrapMaxTokens === undefined) return resolved
+    if (agent === undefined || appliedWindows.size === 0) return resolved
     const state = refresh(agent, policy)
     if (state.promoted) {
-      if (resolved.maxTokens !== policy.bootstrapMaxTokens) return resolved
+      if (!appliedWindows.has(resolved.maxTokens)) return resolved
       const rest = { ...resolved }
       delete rest.maxTokens
       return rest
     }
-    return { ...resolved, maxTokens: policy.bootstrapMaxTokens }
+    const window = windowFor(resolved)
+    if (window === undefined) return resolved
+    return { ...resolved, maxTokens: window }
   }), { prepend: true })
 }
