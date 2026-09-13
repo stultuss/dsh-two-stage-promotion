@@ -1,4 +1,8 @@
-# dsh-two-stage-promotion
+# 【弃用】dsh-two-stage-promotion
+
+## 已弃用: V4.1 Flash 实现了 32/32 的全锚定
+
+---
 
 二阶段晋升模式 —— dsh web GUI 的 agent preset 插件(host half),不带浏览器 half。
 
