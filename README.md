@@ -1,4 +1,4 @@
-# 【弃用】dsh-two-stage-promotion
+# dsh-two-stage-promotion
 
 ## 已弃用: V4.1 Flash 实现了 32/32 的全锚定
 
